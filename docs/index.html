@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>md2loop — Markdown ↔ Loop, one shortcut.</title>
+  <meta name="description" content="A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.">
+  <meta property="og:title" content="md2loop — Markdown ↔ Loop, one shortcut.">
+  <meta property="og:description" content="A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.">
+  <meta property="og:image" content="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-markdown.png">
+  <meta property="og:url" content="https://trsdn.github.io/md2loop/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-empty.png">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", Helvetica, Arial, sans-serif;
+      color: #1d1d1f;
+      background: #fff;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+
+    .hero .tagline {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: #008CD2;
+      margin-bottom: 12px;
+    }
+
+    .hero .subtitle {
+      font-size: 1.1rem;
+      color: #6e6e73;
+      max-width: 520px;
+      margin: 0 auto 32px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: #008CD2;
+      color: #fff;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .btn-primary:hover { background: #006fa6; }
+
+    .btn-secondary {
+      display: inline-block;
+      color: #008CD2;
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 500;
+      padding: 14px 16px;
+      transition: opacity 0.2s;
+    }
+
+    .btn-secondary:hover { opacity: 0.7; }
+
+    /* Screenshots */
+    .screenshots {
+      padding: 40px 0 60px;
+    }
+
+    .screenshots-grid {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .screenshots-grid img {
+      width: calc(33.333% - 12px);
+      min-width: 200px;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    /* Section heading */
+    .section-title {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 40px;
+    }
+
+    /* Features */
+    .features {
+      padding: 60px 0;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .feature {
+      padding: 24px;
+      border-radius: 12px;
+      background: #f5f5f7;
+    }
+
+    .feature .icon {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .feature h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .feature p {
+      font-size: 0.95rem;
+      color: #6e6e73;
+      line-height: 1.5;
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 60px 0;
+    }
+
+    .steps {
+      display: flex;
+      gap: 32px;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .step {
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .step .step-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .step h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .step p {
+      font-size: 0.9rem;
+      color: #6e6e73;
+    }
+
+    .step-arrow {
+      display: flex;
+      align-items: center;
+      font-size: 1.5rem;
+      color: #c7c7cc;
+      padding-top: 16px;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 48px 0 32px;
+      border-top: 1px solid #e5e5ea;
+      margin-top: 40px;
+      color: #6e6e73;
+      font-size: 0.9rem;
+    }
+
+    footer p { margin-bottom: 6px; }
+
+    footer a {
+      color: #008CD2;
+      text-decoration: none;
+    }
+
+    footer a:hover { text-decoration: underline; }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .hero { padding: 56px 0 40px; }
+      .hero h1 { font-size: 2.5rem; }
+      .hero .tagline { font-size: 1.2rem; }
+      .hero .subtitle { font-size: 1rem; }
+
+      .screenshots-grid img {
+        width: 100%;
+        min-width: unset;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .steps {
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .step-arrow {
+        transform: rotate(90deg);
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>md2loop</h1>
+      <p class="tagline">Markdown ↔ Loop, one shortcut.</p>
+      <p class="subtitle">A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/trsdn/md2loop/releases/latest" class="btn-primary">Download for macOS</a>
+        <a href="https://github.com/trsdn/md2loop" class="btn-secondary">View on GitHub →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="screenshots">
+    <div class="container">
+      <div class="screenshots-grid">
+        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-markdown.png" alt="md2loop showing Markdown content" loading="lazy">
+        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-html.png" alt="md2loop showing HTML output" loading="lazy">
+        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-empty.png" alt="md2loop empty state" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <div class="container">
+      <h2 class="section-title">Features</h2>
+      <div class="features-grid">
+        <div class="feature">
+          <div class="icon">⌘⏎</div>
+          <h3>One Shortcut</h3>
+          <p>Auto-detects content type and converts — no menus, no fuss.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">↔</div>
+          <h3>Bidirectional</h3>
+          <p>Markdown to Loop and Loop to Markdown, in either direction.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">📋</div>
+          <h3>Smart Clipboard</h3>
+          <p>Sets HTML + RTF + plain text for maximum compatibility.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">⚡</div>
+          <h3>Lightweight</h3>
+          <p>Native SwiftUI, no Electron, instant conversion.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">📝</div>
+          <h3>Full Markdown</h3>
+          <p>Headings, tables, code, task lists, links, and more.</p>
+        </div>
+        <div class="feature">
+          <div class="icon">🔒</div>
+          <h3>Private</h3>
+          <p>Everything stays on your clipboard, no network access.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works">
+    <div class="container">
+      <h2 class="section-title">How It Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-icon">📄</div>
+          <h3>Copy</h3>
+          <p>Copy Markdown or Loop content to your clipboard.</p>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step">
+          <div class="step-icon">🔄</div>
+          <h3>Convert</h3>
+          <p>Press ⌘⏎ in md2loop to convert.</p>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step">
+          <div class="step-icon">✅</div>
+          <h3>Paste</h3>
+          <p>Paste into your target app.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>MIT License</p>
+      <p>Made with ♥ for the Loop community</p>
+      <p><a href="https://github.com/trsdn/md2loop">github.com/trsdn/md2loop</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>
