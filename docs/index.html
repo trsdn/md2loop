@@ -3,330 +3,729 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>md2loop — Markdown ↔ Loop, one shortcut.</title>
-  <meta name="description" content="A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.">
-  <meta property="og:title" content="md2loop — Markdown ↔ Loop, one shortcut.">
-  <meta property="og:description" content="A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.">
+  <title>md2loop — Markdown ↔ Loop</title>
+  <meta name="description" content="A macOS utility that converts Markdown to Microsoft Loop and back. One shortcut. Both directions.">
+  <meta property="og:title" content="md2loop — Markdown ↔ Loop">
+  <meta property="og:description" content="A macOS utility that converts Markdown to Microsoft Loop and back. One shortcut. Both directions.">
   <meta property="og:image" content="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-markdown.png">
   <meta property="og:url" content="https://trsdn.github.io/md2loop/">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-empty.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,wght@0,400;0,500;0,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --ink: #0a0f1c;
+      --cream: #f8f6f1;
+      --blue: #0088cc;
+      --blue-deep: #005f8f;
+      --orange: #e8613c;
+      --gray: #6b7280;
+      --gray-light: #d1d5db;
+      --serif: 'Instrument Serif', Georgia, serif;
+      --sans: 'DM Sans', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", Helvetica, Arial, sans-serif;
-      color: #1d1d1f;
-      background: #fff;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: var(--cream);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 24px;
+    ::selection {
+      background: var(--blue);
+      color: white;
     }
 
-    /* Hero */
+    /* ---- NAV ---- */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(248, 246, 241, 0.8);
+      border-bottom: 1px solid rgba(10, 15, 28, 0.06);
+    }
+
+    nav .logo {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    nav .nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    nav .nav-links a {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--gray);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    nav .nav-links a:hover { color: var(--ink); }
+
+    nav .nav-cta {
+      font-size: 0.85rem !important;
+      font-weight: 500 !important;
+      color: white !important;
+      background: var(--ink);
+      padding: 8px 20px;
+      border-radius: 6px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    nav .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(10, 15, 28, 0.2);
+      color: white !important;
+    }
+
+    /* ---- HERO ---- */
     .hero {
-      text-align: center;
-      padding: 80px 0 60px;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      padding: 120px 32px 80px;
+    }
+
+    .hero-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--blue);
+      background: rgba(0, 136, 204, 0.08);
+      border: 1px solid rgba(0, 136, 204, 0.15);
+      padding: 6px 14px;
+      border-radius: 100px;
+      margin-bottom: 32px;
+      animation: fadeUp 0.8s ease both;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--blue);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
     }
 
     .hero h1 {
-      font-size: 3.5rem;
-      font-weight: 700;
+      font-family: var(--serif);
+      font-size: clamp(3.5rem, 8vw, 7rem);
+      font-weight: 400;
+      line-height: 0.95;
       letter-spacing: -0.03em;
-      margin-bottom: 12px;
+      margin-bottom: 32px;
+      animation: fadeUp 0.8s 0.1s ease both;
     }
 
-    .hero .tagline {
-      font-size: 1.5rem;
-      font-weight: 500;
-      color: #008CD2;
-      margin-bottom: 12px;
+    .hero h1 .arrow {
+      display: inline-block;
+      color: var(--blue);
+      font-style: italic;
+      transition: transform 0.4s ease;
     }
 
-    .hero .subtitle {
-      font-size: 1.1rem;
-      color: #6e6e73;
-      max-width: 520px;
-      margin: 0 auto 32px;
+    .hero h1:hover .arrow {
+      transform: scaleX(-1);
+    }
+
+    .hero h1 br { display: block; }
+
+    .hero-desc {
+      font-size: 1.15rem;
+      color: var(--gray);
+      max-width: 480px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+      animation: fadeUp 0.8s 0.2s ease both;
     }
 
     .hero-actions {
       display: flex;
       gap: 16px;
-      justify-content: center;
       align-items: center;
       flex-wrap: wrap;
+      animation: fadeUp 0.8s 0.3s ease both;
     }
 
-    .btn-primary {
-      display: inline-block;
-      background: #008CD2;
-      color: #fff;
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--ink);
+      color: white;
       text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 600;
-      transition: background 0.2s;
-    }
-
-    .btn-primary:hover { background: #006fa6; }
-
-    .btn-secondary {
-      display: inline-block;
-      color: #008CD2;
-      text-decoration: none;
-      font-size: 1rem;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 0.95rem;
       font-weight: 500;
-      padding: 14px 16px;
-      transition: opacity 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    .btn-secondary:hover { opacity: 0.7; }
-
-    /* Screenshots */
-    .screenshots {
-      padding: 40px 0 60px;
+    .btn-download:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(10, 15, 28, 0.25);
     }
 
-    .screenshots-grid {
+    .btn-download svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      text-decoration: none;
+      padding: 16px 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border-bottom: 1.5px solid transparent;
+      transition: border-color 0.2s;
+    }
+
+    .btn-source:hover {
+      border-bottom-color: var(--ink);
+    }
+
+    /* Floating shortcut hint */
+    .hero-shortcut {
+      position: absolute;
+      right: 64px;
+      bottom: 80px;
+      text-align: right;
+      animation: fadeUp 0.8s 0.5s ease both;
+    }
+
+    .hero-shortcut kbd {
+      display: block;
+      font-family: var(--mono);
+      font-size: 2.5rem;
+      font-weight: 400;
+      color: rgba(10, 15, 28, 0.1);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .hero-shortcut span {
+      font-size: 0.8rem;
+      color: var(--gray-light);
+      font-weight: 500;
+    }
+
+    /* ---- DUALITY SECTION ---- */
+    .duality {
+      padding: 120px 32px;
+      background: var(--ink);
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .duality::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: var(--cream);
+      clip-path: ellipse(60% 100% at 50% 0%);
+    }
+
+    .duality-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 80px 1fr;
+      gap: 0;
+      align-items: center;
+    }
+
+    .duality-side {
+      padding: 48px;
+      border-radius: 16px;
+      min-height: 320px;
       display: flex;
-      gap: 16px;
+      flex-direction: column;
       justify-content: center;
-      flex-wrap: wrap;
     }
 
-    .screenshots-grid img {
-      width: calc(33.333% - 12px);
-      min-width: 200px;
-      border-radius: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    .duality-md {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    /* Section heading */
-    .section-title {
-      text-align: center;
+    .duality-loop {
+      background: rgba(0, 136, 204, 0.08);
+      border: 1px solid rgba(0, 136, 204, 0.15);
+    }
+
+    .duality-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.4);
+      margin-bottom: 20px;
+    }
+
+    .duality-loop .duality-label { color: var(--blue); }
+
+    .duality-md pre {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      line-height: 1.8;
+      color: rgba(255, 255, 255, 0.7);
+      white-space: pre-wrap;
+    }
+
+    .duality-md pre .hl {
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .duality-loop .rendered {
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      line-height: 1.8;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .duality-loop .rendered h3 {
+      font-family: var(--serif);
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 12px;
+      color: white;
+    }
+
+    .duality-loop .rendered ul {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+
+    .duality-loop .rendered li { margin-bottom: 4px; }
+
+    .duality-loop .rendered strong { color: white; }
+
+    .duality-center {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .duality-arrows {
+      font-family: var(--serif);
       font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 40px;
+      font-style: italic;
+      color: var(--blue);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
     }
 
-    /* Features */
+    /* ---- FEATURES ---- */
     .features {
-      padding: 60px 0;
+      padding: 120px 32px;
+    }
+
+    .features-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .features-header {
+      margin-bottom: 64px;
+    }
+
+    .features-header h2 {
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    .features-header p {
+      color: var(--gray);
+      font-size: 1.05rem;
     }
 
     .features-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: rgba(10, 15, 28, 0.08);
+      border-radius: 16px;
+      overflow: hidden;
     }
 
     .feature {
-      padding: 24px;
-      border-radius: 12px;
-      background: #f5f5f7;
+      background: var(--cream);
+      padding: 40px 32px;
+      transition: background 0.3s;
     }
 
-    .feature .icon {
-      font-size: 1.5rem;
-      margin-bottom: 8px;
+    .feature:hover {
+      background: white;
+    }
+
+    .feature-icon {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--blue);
+      background: rgba(0, 136, 204, 0.08);
+      padding: 6px 12px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-bottom: 20px;
     }
 
     .feature h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 6px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
     }
 
     .feature p {
-      font-size: 0.95rem;
-      color: #6e6e73;
-      line-height: 1.5;
+      font-size: 0.9rem;
+      color: var(--gray);
+      line-height: 1.6;
     }
 
-    /* How it works */
-    .how-it-works {
-      padding: 60px 0;
+    /* ---- HOW IT WORKS ---- */
+    .how {
+      padding: 100px 32px 120px;
+      background: white;
     }
 
-    .steps {
-      display: flex;
-      gap: 32px;
-      justify-content: center;
+    .how-inner {
+      max-width: 800px;
+      margin: 0 auto;
       text-align: center;
     }
 
-    .step {
+    .how h2 {
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 64px;
+    }
+
+    .how-steps {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .how-step {
       flex: 1;
       max-width: 200px;
     }
 
-    .step .step-icon {
-      font-size: 2.5rem;
-      margin-bottom: 12px;
+    .how-step-num {
+      font-family: var(--serif);
+      font-size: 3rem;
+      font-style: italic;
+      color: var(--blue);
+      line-height: 1;
+      margin-bottom: 16px;
     }
 
-    .step h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 6px;
+    .how-step h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
     }
 
-    .step p {
-      font-size: 0.9rem;
-      color: #6e6e73;
+    .how-step p {
+      font-size: 0.85rem;
+      color: var(--gray);
     }
 
-    .step-arrow {
+    .how-connector {
+      width: 60px;
       display: flex;
       align-items: center;
-      font-size: 1.5rem;
-      color: #c7c7cc;
-      padding-top: 16px;
+      justify-content: center;
+      padding-top: 24px;
+      color: var(--gray-light);
+      font-size: 1.2rem;
     }
 
-    /* Footer */
+    .how-connector svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--gray-light);
+    }
+
+    /* ---- FOOTER ---- */
     footer {
-      text-align: center;
-      padding: 48px 0 32px;
-      border-top: 1px solid #e5e5ea;
-      margin-top: 40px;
-      color: #6e6e73;
-      font-size: 0.9rem;
+      padding: 48px 32px;
+      background: var(--ink);
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.85rem;
     }
 
-    footer p { margin-bottom: 6px; }
+    footer .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
 
     footer a {
-      color: #008CD2;
+      color: rgba(255, 255, 255, 0.6);
       text-decoration: none;
+      transition: color 0.2s;
     }
 
-    footer a:hover { text-decoration: underline; }
+    footer a:hover { color: white; }
 
-    /* Responsive */
-    @media (max-width: 640px) {
-      .hero { padding: 56px 0 40px; }
-      .hero h1 { font-size: 2.5rem; }
-      .hero .tagline { font-size: 1.2rem; }
-      .hero .subtitle { font-size: 1rem; }
+    footer .footer-links {
+      display: flex;
+      gap: 24px;
+    }
 
-      .screenshots-grid img {
-        width: 100%;
-        min-width: unset;
+    /* ---- ANIMATIONS ---- */
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
       }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Scroll-triggered */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 900px) {
+      .duality-inner {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+      .duality-center {
+        transform: rotate(90deg);
+      }
       .features-grid {
         grid-template-columns: 1fr;
-        gap: 16px;
       }
+    }
 
-      .steps {
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .step-arrow {
-        transform: rotate(90deg);
-        padding: 0;
-      }
+    @media (max-width: 640px) {
+      nav { padding: 12px 20px; }
+      .hero { padding: 100px 20px 60px; }
+      .hero-shortcut { display: none; }
+      .duality { padding: 80px 20px; }
+      .duality-side { padding: 28px; min-height: auto; }
+      .features { padding: 80px 20px; }
+      .how { padding: 80px 20px; }
+      .how-steps { flex-direction: column; align-items: center; }
+      .how-connector { transform: rotate(90deg); padding: 0; width: auto; }
+      nav .nav-links a:not(.nav-cta) { display: none; }
     }
   </style>
 </head>
 <body>
 
+  <!-- Nav -->
+  <nav>
+    <a href="#" class="logo">md2loop</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="https://github.com/trsdn/md2loop" class="nav-cta">GitHub</a>
+    </div>
+  </nav>
+
   <!-- Hero -->
   <section class="hero">
-    <div class="container">
-      <h1>md2loop</h1>
-      <p class="tagline">Markdown ↔ Loop, one shortcut.</p>
-      <p class="subtitle">A lightweight macOS utility for seamless clipboard conversion between Markdown and Microsoft Loop.</p>
+    <div class="hero-inner">
+      <div class="hero-badge">v1.0.0 — macOS Sonoma+</div>
+      <h1>Markdown<br><span class="arrow">↔</span> Loop</h1>
+      <p class="hero-desc">A tiny macOS utility that converts your clipboard between Markdown and Microsoft Loop. One shortcut, both directions, nothing else.</p>
       <div class="hero-actions">
-        <a href="https://github.com/trsdn/md2loop/releases/latest" class="btn-primary">Download for macOS</a>
-        <a href="https://github.com/trsdn/md2loop" class="btn-secondary">View on GitHub →</a>
+        <a href="https://github.com/trsdn/md2loop/releases/latest" class="btn-download">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for macOS
+        </a>
+        <a href="https://github.com/trsdn/md2loop" class="btn-source">View source →</a>
       </div>
+    </div>
+    <div class="hero-shortcut">
+      <kbd>⌘⏎</kbd>
+      <span>That's it.</span>
     </div>
   </section>
 
-  <!-- Screenshots -->
-  <section class="screenshots">
-    <div class="container">
-      <div class="screenshots-grid">
-        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-markdown.png" alt="md2loop showing Markdown content" loading="lazy">
-        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-html.png" alt="md2loop showing HTML output" loading="lazy">
-        <img src="https://raw.githubusercontent.com/trsdn/md2loop/main/assets/screenshot-empty.png" alt="md2loop empty state" loading="lazy">
+  <!-- Duality: MD ↔ Loop -->
+  <section class="duality">
+    <div class="duality-inner reveal">
+      <div class="duality-side duality-md">
+        <div class="duality-label">Markdown</div>
+        <pre><span class="hl">## Sprint Review</span>
+
+- <span class="hl">**API migration**</span> complete
+- Dashboard <span class="hl">~~delayed~~</span> shipped
+- [x] Tests passing
+- [ ] Docs updated
+
+> Ship it.</pre>
+      </div>
+      <div class="duality-center">
+        <div class="duality-arrows">
+          <span>→</span>
+          <span>←</span>
+        </div>
+      </div>
+      <div class="duality-side duality-loop">
+        <div class="duality-label">Microsoft Loop</div>
+        <div class="rendered">
+          <h3>Sprint Review</h3>
+          <ul>
+            <li><strong>API migration</strong> complete</li>
+            <li>Dashboard <s>delayed</s> shipped</li>
+            <li>☑ Tests passing</li>
+            <li>☐ Docs updated</li>
+          </ul>
+          <br>
+          <blockquote style="border-left: 2px solid var(--blue); padding-left: 12px; color: rgba(255,255,255,0.6); font-style: italic;">Ship it.</blockquote>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Features -->
-  <section class="features">
-    <div class="container">
-      <h2 class="section-title">Features</h2>
-      <div class="features-grid">
+  <section class="features" id="features">
+    <div class="features-inner">
+      <div class="features-header reveal">
+        <h2>Built for the workflow<br>you already have.</h2>
+        <p>No configuration. No accounts. No internet. Just your clipboard.</p>
+      </div>
+      <div class="features-grid reveal">
         <div class="feature">
-          <div class="icon">⌘⏎</div>
-          <h3>One Shortcut</h3>
-          <p>Auto-detects content type and converts — no menus, no fuss.</p>
+          <div class="feature-icon">⌘⏎</div>
+          <h3>One shortcut</h3>
+          <p>Auto-detects what's on your clipboard and does the right conversion. Markdown in? HTML out. Rich text in? Markdown out.</p>
         </div>
         <div class="feature">
-          <div class="icon">↔</div>
+          <div class="feature-icon">↔</div>
           <h3>Bidirectional</h3>
-          <p>Markdown to Loop and Loop to Markdown, in either direction.</p>
+          <p>Markdown to Loop for pasting. Loop to Markdown for editing. Same app, same shortcut, both directions.</p>
         </div>
         <div class="feature">
-          <div class="icon">📋</div>
-          <h3>Smart Clipboard</h3>
-          <p>Sets HTML + RTF + plain text for maximum compatibility.</p>
+          <div class="feature-icon">3×</div>
+          <h3>Triple format</h3>
+          <p>Sets HTML, RTF, and plain text on clipboard simultaneously. Maximum compatibility with every Microsoft app.</p>
         </div>
         <div class="feature">
-          <div class="icon">⚡</div>
-          <h3>Lightweight</h3>
-          <p>Native SwiftUI, no Electron, instant conversion.</p>
+          <div class="feature-icon">0ms</div>
+          <h3>Instant</h3>
+          <p>Native SwiftUI. No Electron, no web views, no runtime. Converts faster than you can lift your finger.</p>
         </div>
         <div class="feature">
-          <div class="icon">📝</div>
+          <div class="feature-icon">GFM</div>
           <h3>Full Markdown</h3>
-          <p>Headings, tables, code, task lists, links, and more.</p>
+          <p>Headings, bold, italic, strikethrough, lists, tables, code blocks, task lists, links, blockquotes, images.</p>
         </div>
         <div class="feature">
-          <div class="icon">🔒</div>
-          <h3>Private</h3>
-          <p>Everything stays on your clipboard, no network access.</p>
+          <div class="feature-icon">∅</div>
+          <h3>Zero network</h3>
+          <p>Everything happens locally on your clipboard. No telemetry, no cloud, no analytics. Your text stays yours.</p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- How it works -->
-  <section class="how-it-works">
-    <div class="container">
-      <h2 class="section-title">How It Works</h2>
-      <div class="steps">
-        <div class="step">
-          <div class="step-icon">📄</div>
+  <section class="how" id="how">
+    <div class="how-inner">
+      <h2 class="reveal">Three steps. One shortcut.</h2>
+      <div class="how-steps reveal">
+        <div class="how-step">
+          <div class="how-step-num">1</div>
           <h3>Copy</h3>
-          <p>Copy Markdown or Loop content to your clipboard.</p>
+          <p>Copy Markdown text or Loop content to your clipboard.</p>
         </div>
-        <div class="step-arrow">→</div>
-        <div class="step">
-          <div class="step-icon">🔄</div>
+        <div class="how-connector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">2</div>
           <h3>Convert</h3>
-          <p>Press ⌘⏎ in md2loop to convert.</p>
+          <p>Press ⌘⏎ in md2loop. It auto-detects and converts.</p>
         </div>
-        <div class="step-arrow">→</div>
-        <div class="step">
-          <div class="step-icon">✅</div>
+        <div class="how-connector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">3</div>
           <h3>Paste</h3>
-          <p>Paste into your target app.</p>
+          <p>⌘V into Loop, or any Markdown editor. Done.</p>
         </div>
       </div>
     </div>
@@ -334,12 +733,23 @@
 
   <!-- Footer -->
   <footer>
-    <div class="container">
-      <p>MIT License</p>
-      <p>Made with ♥ for the Loop community</p>
-      <p><a href="https://github.com/trsdn/md2loop">github.com/trsdn/md2loop</a></p>
+    <div class="footer-inner">
+      <span>MIT License · © 2026</span>
+      <div class="footer-links">
+        <a href="https://github.com/trsdn/md2loop">GitHub</a>
+        <a href="https://github.com/trsdn/md2loop/releases/latest">Download</a>
+        <a href="https://github.com/trsdn/md2loop/blob/main/CONTRIBUTING.md">Contribute</a>
+      </div>
     </div>
   </footer>
+
+  <!-- Scroll reveal -->
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
 
 </body>
 </html>
