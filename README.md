@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/screenshot-markdown.png" width="250" alt="md2loop">
+  <img src="assets/demo.gif" width="500" alt="md2loop demo">
 </p>
 
 <h1 align="center">md2loop</h1>
