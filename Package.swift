@@ -18,5 +18,9 @@ let package = Package(
                 .product(name: "SwiftSoup", package: "SwiftSoup"),
             ]
         ),
+        .testTarget(
+            name: "md2loopTests",
+            dependencies: ["md2loop"]
+        ),
     ]
 )

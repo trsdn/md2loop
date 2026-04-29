@@ -14,12 +14,16 @@
 		98847E982BBD3BDF22ADEC77 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 862F30A5B27D41635DA20DD5 /* SwiftSoup */; };
 		B319AB6905E053DD13264C89 /* md2loopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCBB1DB36E00F0A2B8C679F8 /* md2loopApp.swift */; };
 		D75790131968E3B8C3D08FAF /* LoopHTMLConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F851D970B0F1822C3DE09B /* LoopHTMLConverter.swift */; };
+		DF2DFB90ED32157B1718C3FB /* ClipboardContentDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DCE33CBDCDDB3EEBA577226 /* ClipboardContentDetector.swift */; };
+		F221295026CF5D81071DBD32 /* RichTextToMarkdownConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAC90F3C2DEB49CBB8D0196 /* RichTextToMarkdownConverter.swift */; };
 		F6DB857DF60258940657FBA9 /* HTMLToMarkdownConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 350D6E38DF2B71672B6587BF /* HTMLToMarkdownConverter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B0D9078099C42B3DC46D2F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		350D6E38DF2B71672B6587BF /* HTMLToMarkdownConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLToMarkdownConverter.swift; sourceTree = "<group>"; };
+		4FAC90F3C2DEB49CBB8D0196 /* RichTextToMarkdownConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextToMarkdownConverter.swift; sourceTree = "<group>"; };
+		5DCE33CBDCDDB3EEBA577226 /* ClipboardContentDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardContentDetector.swift; sourceTree = "<group>"; };
 		61F851D970B0F1822C3DE09B /* LoopHTMLConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopHTMLConverter.swift; sourceTree = "<group>"; };
 		795E6D3D5BC9E673E369ADF7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		799C25941EE227017E9551E7 /* md2loop.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = md2loop.entitlements; sourceTree = "<group>"; };
@@ -46,6 +50,7 @@
 			isa = PBXGroup;
 			children = (
 				85D676E0C9CD67512D2B68A7 /* Assets.xcassets */,
+				5DCE33CBDCDDB3EEBA577226 /* ClipboardContentDetector.swift */,
 				F5398993B05EA197188A3CBB /* ClipboardManager.swift */,
 				13B0D9078099C42B3DC46D2F /* ContentView.swift */,
 				350D6E38DF2B71672B6587BF /* HTMLToMarkdownConverter.swift */,
@@ -53,6 +58,7 @@
 				61F851D970B0F1822C3DE09B /* LoopHTMLConverter.swift */,
 				799C25941EE227017E9551E7 /* md2loop.entitlements */,
 				BCBB1DB36E00F0A2B8C679F8 /* md2loopApp.swift */,
+				4FAC90F3C2DEB49CBB8D0196 /* RichTextToMarkdownConverter.swift */,
 			);
 			path = md2loop;
 			sourceTree = "<group>";
@@ -153,10 +159,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DF2DFB90ED32157B1718C3FB /* ClipboardContentDetector.swift in Sources */,
 				385E157374347956723049BE /* ClipboardManager.swift in Sources */,
 				9667398A13B6015828F72D81 /* ContentView.swift in Sources */,
 				F6DB857DF60258940657FBA9 /* HTMLToMarkdownConverter.swift in Sources */,
 				D75790131968E3B8C3D08FAF /* LoopHTMLConverter.swift in Sources */,
+				F221295026CF5D81071DBD32 /* RichTextToMarkdownConverter.swift in Sources */,
 				B319AB6905E053DD13264C89 /* md2loopApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

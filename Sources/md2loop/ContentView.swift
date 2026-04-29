@@ -5,6 +5,7 @@ import AppKit
 struct ContentView: View {
     @State private var clipboardText: String? = nil
     @State private var clipboardHTML: String? = nil
+    @State private var clipboardRTF: Data? = nil
     @State private var clipboardLength: Int = 0
     @State private var feedbackMessage: String? = nil
     @State private var feedbackIsSuccess: Bool = true
@@ -13,9 +14,7 @@ struct ContentView: View {
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var clipboardMode: ClipboardMode {
-        if isHTML { return .html }
-        if isMarkdown { return .markdown }
-        return .unknown
+        ClipboardContentDetector.mode(text: clipboardText, html: clipboardHTML, rtfData: clipboardRTF)
     }
 
     var body: some View {
@@ -55,7 +54,7 @@ struct ContentView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                     Text("Markdown")
-                case .html:
+                case .richText:
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.blue)
                     Text("Rich Text")
@@ -79,7 +78,7 @@ struct ContentView: View {
                 switch clipboardMode {
                 case .markdown:
                     Label("Convert to Loop", systemImage: "arrow.right")
-                case .html:
+                case .richText:
                     Label("Convert to Markdown", systemImage: "arrow.left")
                 case .unknown:
                     Label("Convert", systemImage: "arrow.left.arrow.right")
@@ -109,60 +108,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Detection
-
-    private enum ClipboardMode: Equatable {
-        case markdown, html, unknown
-    }
-
-    private var isHTML: Bool {
-        guard let html = clipboardHTML, !html.isEmpty else { return false }
-        return html.range(of: #"<[a-zA-Z][^>]*>"#, options: .regularExpression) != nil
-    }
-
-    private var isMarkdown: Bool {
-        guard let text = clipboardText, !text.isEmpty else { return false }
-        if isHTML { return false }
-        let lines = text.components(separatedBy: "\n")
-        var signals = 0
-
-        if lines.contains(where: { $0.range(of: #"^#{1,6}\s"#, options: .regularExpression) != nil }) {
-            signals += 1
-        }
-        if text.contains("**") || text.range(of: #"(?<!\*)\*[^\s*]"#, options: .regularExpression) != nil {
-            signals += 1
-        }
-        if lines.contains(where: { $0.range(of: #"^\s*[-*]\s"#, options: .regularExpression) != nil }) {
-            signals += 1
-        }
-        if lines.contains(where: { $0.range(of: #"^\s*\d+\.\s"#, options: .regularExpression) != nil }) {
-            signals += 1
-        }
-        if text.contains("`") {
-            signals += 1
-        }
-        if text.range(of: #"\[.+?\]\(.+?\)"#, options: .regularExpression) != nil {
-            signals += 1
-        }
-        if lines.contains(where: { $0.range(of: #"^\|.+\|$"#, options: .regularExpression) != nil }) {
-            signals += 1
-        }
-        if lines.contains(where: { $0.hasPrefix("> ") }) {
-            signals += 1
-        }
-        if text.contains("- [ ]") || text.contains("- [x]") || text.contains("- [X]") {
-            signals += 1
-        }
-
-        let hasStrongSignal = lines.contains(where: { $0.range(of: #"^#{1,6}\s"#, options: .regularExpression) != nil })
-            || text.range(of: #"\[.+?\]\(.+?\)"#, options: .regularExpression) != nil
-            || lines.contains(where: { $0.range(of: #"^\|.+\|$"#, options: .regularExpression) != nil })
-            || text.contains("- [ ]") || text.contains("- [x]") || text.contains("- [X]")
-            || text.contains("```")
-
-        return hasStrongSignal || signals >= 2
-    }
-
     // MARK: - Actions
 
     private func pollClipboard() {
@@ -171,13 +116,14 @@ struct ContentView: View {
         lastChangeCount = changeCount
         clipboardText = ClipboardManager.readText()
         clipboardHTML = ClipboardManager.readHTML()
-        clipboardLength = clipboardText?.count ?? 0
+        clipboardRTF = ClipboardManager.readRTF()
+        clipboardLength = clipboardText?.count ?? clipboardHTML?.count ?? clipboardRTF?.count ?? 0
     }
 
     private func convert() {
-        if isHTML {
+        if clipboardMode == .richText {
             convertToMarkdown()
-        } else if isMarkdown {
+        } else if clipboardMode == .markdown {
             convertToLoop()
         }
     }
@@ -190,8 +136,10 @@ struct ContentView: View {
     }
 
     private func convertToMarkdown() {
-        guard let html = clipboardHTML, !html.isEmpty else { return }
-        let markdown = HTMLToMarkdownConverter.convert(html)
+        guard let markdown = ClipboardManager.readRichTextMarkdown() else {
+            showFeedback("Could not read rich text", isSuccess: false)
+            return
+        }
         ClipboardManager.writeMarkdown(markdown)
         showFeedback("Markdown copied", isSuccess: true)
     }

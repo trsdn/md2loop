@@ -96,9 +96,9 @@ struct HTMLToMarkdownConverter {
             }
             let content: String
             if let codeEl = codeElement {
-                content = (try? codeEl.text()) ?? ""
+                content = preservingWhitespaceText(codeEl)
             } else {
-                content = (try? element.text()) ?? ""
+                content = preservingWhitespaceText(element)
             }
             return "\n```\(lang)\n\(content)\n```\n\n"
 
@@ -159,6 +159,13 @@ struct HTMLToMarkdownConverter {
             let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
             return "\(content)\n"
 
+        // Styled spans from RTF/attributed-string HTML exports
+        case "span", "font":
+            return applyInlineStyle(
+                to: convertChildren(element, listDepth: listDepth, inPre: inPre),
+                style: (try? element.attr("style")) ?? ""
+            )
+
         // Default: transparent wrapper
         default:
             return convertChildren(element, listDepth: listDepth, inPre: inPre)
@@ -185,25 +192,73 @@ struct HTMLToMarkdownConverter {
         let uncheckedInputEl = (try? li.select("input[type=checkbox]"))?.first()
         let hasUncheckedInput = uncheckedInputEl != nil && !checkedInput
 
-        let content = convertChildren(li, listDepth: listDepth + 1, inPre: false)
+        var orderedNestedIndex: Int? = nil
+        var inlineContent = ""
+        var nestedContent = ""
+
+        for child in li.getChildNodes() {
+            if let childElement = child as? Element {
+                let childTag = childElement.tagName().lowercased()
+                if childTag == "ul" || childTag == "ol" {
+                    nestedContent += convertNode(
+                        childElement,
+                        listDepth: listDepth + 1,
+                        orderedIndex: &orderedNestedIndex,
+                        inPre: false
+                    )
+                    continue
+                }
+            }
+            inlineContent += convertNode(child, listDepth: listDepth, orderedIndex: &orderedNestedIndex, inPre: false)
+        }
+
+        let content = inlineContent
             .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: .newlines)
 
         if hasCheckedUnicode || checkedInput {
             let cleaned = content
                 .replacingOccurrences(of: "☑", with: "")
                 .trimmingCharacters(in: .whitespaces)
-            return "\(indent)- [x] \(cleaned)\n"
+            return "\(indent)- [x] \(cleaned)\n\(nestedContent)"
         } else if hasUncheckedUnicode || hasUncheckedInput {
             let cleaned = content
                 .replacingOccurrences(of: "☐", with: "")
                 .trimmingCharacters(in: .whitespaces)
-            return "\(indent)- [ ] \(cleaned)\n"
+            return "\(indent)- [ ] \(cleaned)\n\(nestedContent)"
         } else if ordered, let idx = orderedIndex {
             orderedIndex = idx + 1
-            return "\(indent)\(idx). \(content)\n"
+            return "\(indent)\(idx). \(content)\n\(nestedContent)"
         } else {
-            return "\(indent)- \(content)\n"
+            return "\(indent)- \(content)\n\(nestedContent)"
         }
+    }
+
+    private static func preservingWhitespaceText(_ element: Element) -> String {
+        element.getChildNodes().map { child in
+            if let textNode = child as? TextNode {
+                return textNode.getWholeText()
+            }
+            if let childElement = child as? Element {
+                return preservingWhitespaceText(childElement)
+            }
+            return ""
+        }.joined()
+    }
+
+    private static func applyInlineStyle(to content: String, style: String) -> String {
+        let normalizedStyle = style.lowercased()
+        var result = content
+        if normalizedStyle.range(of: #"font-weight\s*:\s*(bold|[6-9]00)"#, options: .regularExpression) != nil {
+            result = "**\(result)**"
+        }
+        if normalizedStyle.range(of: #"font-style\s*:\s*italic"#, options: .regularExpression) != nil {
+            result = "*\(result)*"
+        }
+        if normalizedStyle.range(of: #"text-decoration[^;]*line-through"#, options: .regularExpression) != nil {
+            result = "~~\(result)~~"
+        }
+        return result
     }
 
     private static func convertTable(_ table: Element) -> String {
