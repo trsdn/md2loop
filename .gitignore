@@ -23,6 +23,10 @@ Package.resolved
 
 # Generated
 *.icns
+.release.env
 release-build/
+dist/
 *.zip
+*.dmg
+*.dmg.sha256
 md2loop-v*.zip

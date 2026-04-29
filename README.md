@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Platform-macOS%2014%2B-lightgrey.svg" alt="Platform: macOS">
   <img src="https://img.shields.io/badge/Swift-5.9-orange.svg" alt="Swift: 5.9">
   <img src="https://img.shields.io/github/v/release/trsdn/md2loop" alt="Release">
-  <img src="https://img.shields.io/github/actions/workflow/status/trsdn/md2loop/build.yml?branch=main" alt="Build">
+  <img src="https://img.shields.io/github/actions/workflow/status/trsdn/md2loop/release.yml" alt="Release build">
 </p>
 
 ---
@@ -48,6 +48,43 @@ git clone https://github.com/trsdn/md2loop.git
 cd md2loop
 xcodegen generate
 xcodebuild -project md2loop.xcodeproj -scheme md2loop -configuration Release build
+```
+
+### Release build
+
+The macOS release flow builds a Developer ID signed app, packages it as a signed DMG, notarizes it,
+and uploads both the DMG and a SHA-256 checksum to the GitHub Release for a `v*` tag.
+
+Required GitHub Actions secrets:
+
+- `MACOS_CERTIFICATE` — base64-encoded Developer ID Application `.p12`
+- `MACOS_CERTIFICATE_PWD` — password for the `.p12`
+- `APPLE_ID` — Apple ID used for notarization
+- `APPLE_TEAM_ID` — Apple Developer Team ID
+- `APPLE_APP_PASSWORD` — app-specific password for notarization
+
+Local release build:
+
+```bash
+./scripts/release_macos.sh
+```
+
+For local signing and notarization, copy the example release environment and adjust it if needed:
+
+```bash
+cp .release.env.example .release.env
+xcrun notarytool store-credentials md2loop \
+  --apple-id "your@email.com" \
+  --team-id "G69Z5BNY97" \
+  --password "app-specific-password"
+```
+
+The local scripts load `.release.env` by default. Set `RELEASE_ENV_FILE` to use another file.
+
+For unsigned local smoke builds only:
+
+```bash
+REQUIRE_SIGNING=0 ./scripts/build_release.sh
 ```
 
 ## Usage

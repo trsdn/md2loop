@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+
+- Added a clean macOS release pipeline for Developer ID signing, DMG packaging, notarization, stapling,
+  checksum generation, and GitHub Release asset upload.
+- Added PtionsPlus-style local `.release.env` support and `NOTARY_PROFILE` notarization for local releases.
+
 ## [1.0.1] - 2026-04-29
 
 ### Added
@@ -31,3 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Keyboard shortcut ⌘⏎ for conversion
 - Unicode checkbox support for task lists (☑/☐)
 - Multi-format clipboard output (HTML + RTF + plain text)
+
+[Unreleased]: https://github.com/trsdn/md2loop/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/trsdn/md2loop/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/trsdn/md2loop/releases/tag/v1.0.0
