@@ -4,18 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.0.1] - 2026-04-29
 
 ### Added
 
-- Regression tests for clipboard content detection, Markdown/HTML roundtrips, nested lists, and RTF conversion.
-- RTF fallback for converting rich text clipboard content to Markdown when HTML is not available.
+- Regression coverage for clipboard format detection, Markdown/HTML round trips, nested lists, and RTF conversion.
 
 ### Fixed
 
-- Detect single-signal Markdown content such as simple bullet lists, ordered lists, inline code, and bold text.
-- Preserve nested list structure when converting HTML to Markdown.
-- Preserve whitespace inside HTML code blocks during Markdown conversion.
+- Improved clipboard format detection for simple Markdown snippets such as bullet lists, numbered lists,
+  inline code, and bold text.
+- Added an RTF fallback so rich text copied from apps without HTML clipboard content can still be converted
+  to Markdown.
+- Preserved nested list structure when converting rich text or HTML to Markdown.
+- Preserved whitespace inside code blocks during HTML to Markdown conversion.
 
 ## [1.0.0] - 2026-02-27
 
