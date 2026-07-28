@@ -1,3 +1,4 @@
+import Foundation
 import Markdown
 
 struct LoopHTMLConverter: MarkupVisitor {
@@ -39,8 +40,8 @@ struct LoopHTMLConverter: MarkupVisitor {
 
     mutating func visitCodeBlock(_ codeBlock: CodeBlock) -> String {
         let escaped = escapeHTML(codeBlock.code)
-        if let lang = codeBlock.language, !lang.isEmpty {
-            return "<pre><code>// \(escapeHTML(lang))\n\(escaped)</code></pre>"
+        if let language = sanitizedLanguage(codeBlock.language) {
+            return "<pre><code class=\"language-\(escapeHTML(language))\">\(escaped)</code></pre>"
         }
         return "<pre><code>\(escaped)</code></pre>"
     }
@@ -58,7 +59,8 @@ struct LoopHTMLConverter: MarkupVisitor {
 
     mutating func visitOrderedList(_ orderedList: OrderedList) -> String {
         let content = orderedList.children.map { visit($0) }.joined()
-        return "<ol>\(content)</ol>"
+        let start = orderedList.startIndex == 1 ? "" : " start=\"\(orderedList.startIndex)\""
+        return "<ol\(start)>\(content)</ol>"
     }
 
     mutating func visitListItem(_ listItem: ListItem) -> String {
@@ -128,14 +130,23 @@ struct LoopHTMLConverter: MarkupVisitor {
 
     mutating func visitLink(_ link: Link) -> String {
         let content = link.children.map { visit($0) }.joined()
-        let href = link.destination ?? ""
+        guard let href = safeLinkURL(link.destination) else {
+            return content
+        }
         return "<a href=\"\(escapeHTML(href))\">\(content)</a>"
     }
 
     mutating func visitImage(_ image: Image) -> String {
         let alt = image.plainText
-        let url = image.source ?? ""
-        return "<a href=\"\(escapeHTML(url))\">[Bild: \(escapeHTML(alt))]</a>"
+        var attributes: [String] = []
+        if let source = safeRemoteImageURL(image.source) {
+            attributes.append("src=\"\(escapeHTML(source))\"")
+        }
+        attributes.append("alt=\"\(escapeHTML(alt))\"")
+        if let title = image.title, !title.isEmpty {
+            attributes.append("title=\"\(escapeHTML(title))\"")
+        }
+        return "<img \(attributes.joined(separator: " "))>"
     }
 
     mutating func visitSoftBreak(_ softBreak: SoftBreak) -> String {
@@ -147,6 +158,49 @@ struct LoopHTMLConverter: MarkupVisitor {
     }
 
     // MARK: - Helpers
+
+    private func sanitizedLanguage(_ language: String?) -> String? {
+        guard let language, !language.isEmpty,
+              language.range(
+                  of: #"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"#,
+                  options: .regularExpression
+              ) != nil else {
+            return nil
+        }
+        return language
+    }
+
+    private func safeLinkURL(_ value: String?) -> String? {
+        guard let value = safeURLText(value), let components = URLComponents(string: value) else {
+            return nil
+        }
+        guard let scheme = components.scheme?.lowercased() else {
+            return value.hasPrefix("//") ? nil : value
+        }
+        return ["http", "https", "mailto", "tel"].contains(scheme) ? value : nil
+    }
+
+    private func safeRemoteImageURL(_ value: String?) -> String? {
+        guard let value = safeURLText(value),
+              let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host != nil else {
+            return nil
+        }
+        return value
+    }
+
+    private func safeURLText(_ value: String?) -> String? {
+        guard let value, !value.isEmpty,
+              value.unicodeScalars.allSatisfy({
+                  !CharacterSet.controlCharacters.contains($0)
+                      && !CharacterSet.whitespacesAndNewlines.contains($0)
+              }) else {
+            return nil
+        }
+        return value
+    }
 
     private func escapeHTML(_ string: String) -> String {
         string

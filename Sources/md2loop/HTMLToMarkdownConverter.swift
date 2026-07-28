@@ -6,16 +6,15 @@ struct HTMLToMarkdownConverter {
     static func convert(_ html: String) -> String {
         guard !html.isEmpty else { return "" }
         do {
-            let doc = try SwiftSoup.parse(html)
-            guard let body = doc.body() else { return "" }
-            var orderedIndex: Int? = nil
-            let raw = body.getChildNodes().map { convertNode($0, listDepth: 0, orderedIndex: &orderedIndex, inPre: false) }.joined()
-            // Trim and collapse excessive newlines
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            let collapsed = trimmed.replacingOccurrences(
-                of: "\\n{3,}", with: "\n\n", options: .regularExpression
+            let document = try SwiftSoup.parse(html)
+            guard let body = document.body() else { return "" }
+            let raw = convertChildren(
+                body,
+                listDepth: 0,
+                inPre: false,
+                startsAtLineStart: true
             )
-            return collapsed
+            return normalizeMarkdown(raw)
         } catch {
             return ""
         }
@@ -23,17 +22,28 @@ struct HTMLToMarkdownConverter {
 
     // MARK: - Recursive node conversion
 
-    private static func convertNode(_ node: Node, listDepth: Int, orderedIndex: inout Int?, inPre: Bool) -> String {
+    private static func convertNode(
+        _ node: Node,
+        listDepth: Int,
+        inPre: Bool,
+        startsAtLineStart: Bool
+    ) -> String {
         if let textNode = node as? TextNode {
-            if inPre {
-                return textNode.getWholeText()
-            }
             let text = textNode.getWholeText()
-            // Collapse whitespace
+            if inPre {
+                return text
+            }
+            if startsAtLineStart,
+               text.contains(where: \.isNewline),
+               text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return ""
+            }
             let collapsed = text.replacingOccurrences(
-                of: "[\\s]+", with: " ", options: .regularExpression
+                of: #"\s+"#,
+                with: " ",
+                options: .regularExpression
             )
-            return collapsed
+            return escapeMarkdownText(collapsed, startsAtLineStart: startsAtLineStart)
         }
 
         guard let element = node as? Element else {
@@ -43,195 +53,398 @@ struct HTMLToMarkdownConverter {
         let tag = element.tagName().lowercased()
 
         switch tag {
-
-        // Headings
         case "h1", "h2", "h3", "h4", "h5", "h6":
-            let level = Int(String(tag.last!))!
+            let level = Int(String(tag.last!)) ?? 1
             let prefix = String(repeating: "#", count: level)
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
-                .trimmingCharacters(in: .whitespaces)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: false,
+                startsAtLineStart: false
+            ).trimmingCharacters(in: .whitespaces)
             return "\(prefix) \(content)\n\n"
 
-        // Paragraphs
         case "p":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
-                .trimmingCharacters(in: .whitespaces)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: false,
+                startsAtLineStart: true
+            ).trimmingCharacters(in: .whitespaces)
             return "\(content)\n\n"
 
-        // Bold
         case "strong", "b":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: false
+            )
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return content
+            }
             return "**\(content)**"
 
-        // Italic
         case "em", "i":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: false
+            )
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return content
+            }
             return "*\(content)*"
 
-        // Strikethrough
         case "s", "del", "strike":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: false
+            )
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return content
+            }
             return "~~\(content)~~"
 
-        // Inline code (not inside pre)
         case "code":
             if inPre {
-                return convertChildren(element, listDepth: listDepth, inPre: true)
+                return preservingWhitespaceText(element)
             }
-            let text = (try? element.text()) ?? ""
-            return "`\(text)`"
+            return inlineCode(preservingWhitespaceText(element))
 
-        // Pre/code blocks
         case "pre":
             let codeElement = try? element.select("code").first()
-            let lang: String
-            if let codeEl = codeElement,
-               let cls = try? codeEl.className(),
-               cls.contains("language-") {
-                lang = cls.replacingOccurrences(
-                    of: ".*language-(\\S+).*", with: "$1", options: .regularExpression
-                )
-            } else {
-                lang = ""
-            }
-            let content: String
-            if let codeEl = codeElement {
-                content = preservingWhitespaceText(codeEl)
-            } else {
-                content = preservingWhitespaceText(element)
-            }
-            return "\n```\(lang)\n\(content)\n```\n\n"
+            let language = codeElement.flatMap(codeLanguage(from:)) ?? codeLanguage(from: element)
+            let content = preservingWhitespaceText(codeElement ?? element)
+            let fence = String(
+                repeating: "`",
+                count: max(3, longestRun(of: "`", in: content) + 1)
+            )
+            let closingSeparator = content.isEmpty || content.hasSuffix("\n") ? "" : "\n"
+            return "\(fence)\(language ?? "")\n\(content)\(closingSeparator)\(fence)\n\n"
 
-        // Links
         case "a":
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: false
+            )
             let href = (try? element.attr("href")) ?? ""
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
-            return "[\(content)](\(href))"
+            guard let destination = markdownDestination(href, forImage: false) else {
+                return content
+            }
+            return "[\(content)](\(destination))"
 
-        // Images
         case "img":
-            let src = (try? element.attr("src")) ?? ""
+            let source = (try? element.attr("src")) ?? ""
             let alt = (try? element.attr("alt")) ?? ""
-            return "![\(alt)](\(src))"
+            let escapedAlt = escapeMarkdownText(alt, startsAtLineStart: false)
+            let destination = markdownDestination(source, forImage: true) ?? ""
+            return "![\(escapedAlt)](\(destination))"
 
-        // Unordered list
         case "ul":
             var result = ""
-            for child in element.children() {
-                guard child.tagName().lowercased() == "li" else { continue }
-                var idx: Int? = nil
-                result += convertListItem(child, listDepth: listDepth, orderedIndex: &idx, ordered: false)
+            for child in element.children() where child.tagName().lowercased() == "li" {
+                var unusedIndex: Int? = nil
+                result += convertListItem(
+                    child,
+                    listDepth: listDepth,
+                    orderedIndex: &unusedIndex,
+                    ordered: false
+                )
             }
             return result
 
-        // Ordered list
         case "ol":
             var result = ""
-            var idx: Int? = 1
-            for child in element.children() {
-                guard child.tagName().lowercased() == "li" else { continue }
-                result += convertListItem(child, listDepth: listDepth, orderedIndex: &idx, ordered: true)
+            var index: Int? = orderedListStart(element)
+            for child in element.children() where child.tagName().lowercased() == "li" {
+                result += convertListItem(
+                    child,
+                    listDepth: listDepth,
+                    orderedIndex: &index,
+                    ordered: true
+                )
             }
             return result
 
-        // Table
         case "table":
             return convertTable(element)
 
-        // Blockquote
         case "blockquote":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let lines = content.components(separatedBy: "\n")
-            let quoted = lines.map { "> \($0)" }.joined(separator: "\n")
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: false,
+                startsAtLineStart: true
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            let quoted = content
+                .components(separatedBy: "\n")
+                .map { $0.isEmpty ? ">" : "> \($0)" }
+                .joined(separator: "\n")
             return "\(quoted)\n\n"
 
-        // Horizontal rule
         case "hr":
             return "\n---\n\n"
 
-        // Line break
         case "br":
             return "\n"
 
-        // Div
         case "div":
-            let content = convertChildren(element, listDepth: listDepth, inPre: inPre)
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: startsAtLineStart
+            )
             return "\(content)\n"
 
-        // Styled spans from RTF/attributed-string HTML exports
         case "span", "font":
-            return applyInlineStyle(
-                to: convertChildren(element, listDepth: listDepth, inPre: inPre),
-                style: (try? element.attr("style")) ?? ""
+            let content = convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: startsAtLineStart
             )
+            return applyInlineStyle(to: content, style: (try? element.attr("style")) ?? "")
 
-        // Default: transparent wrapper
         default:
-            return convertChildren(element, listDepth: listDepth, inPre: inPre)
+            return convertChildren(
+                element,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: startsAtLineStart
+            )
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Lists
 
-    private static func convertChildren(_ element: Element, listDepth: Int, inPre: Bool) -> String {
-        var orderedIndex: Int? = nil
-        return element.getChildNodes().map {
-            convertNode($0, listDepth: listDepth, orderedIndex: &orderedIndex, inPre: inPre)
-        }.joined()
+    private static func orderedListStart(_ list: Element) -> Int {
+        let value = ((try? list.attr("start")) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, let parsed = Int(value), parsed >= 0 else {
+            return 1
+        }
+        return parsed
     }
 
-    private static func convertListItem(_ li: Element, listDepth: Int, orderedIndex: inout Int?, ordered: Bool) -> String {
+    private static func convertListItem(
+        _ item: Element,
+        listDepth: Int,
+        orderedIndex: inout Int?,
+        ordered: Bool
+    ) -> String {
         let indent = String(repeating: "    ", count: listDepth)
+        let text = ((try? item.text()) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCheckedUnicode = text.hasPrefix("☑")
+        let hasUncheckedUnicode = text.hasPrefix("☐")
+        let checkedInput = (try? item.select("input[type=checkbox][checked]"))?.first() != nil
+        let checkboxInput = (try? item.select("input[type=checkbox]"))?.first()
+        let hasUncheckedInput = checkboxInput != nil && !checkedInput
 
-        // Check for task list
-        let text = (try? li.text()) ?? ""
-        let hasCheckedUnicode = text.contains("☑")
-        let hasUncheckedUnicode = text.contains("☐")
-        let checkedInput = (try? li.select("input[type=checkbox][checked]"))?.first() != nil
-        let uncheckedInputEl = (try? li.select("input[type=checkbox]"))?.first()
-        let hasUncheckedInput = uncheckedInputEl != nil && !checkedInput
-
-        var orderedNestedIndex: Int? = nil
         var inlineContent = ""
         var nestedContent = ""
 
-        for child in li.getChildNodes() {
+        for child in item.getChildNodes() {
             if let childElement = child as? Element {
                 let childTag = childElement.tagName().lowercased()
                 if childTag == "ul" || childTag == "ol" {
                     nestedContent += convertNode(
                         childElement,
                         listDepth: listDepth + 1,
-                        orderedIndex: &orderedNestedIndex,
-                        inPre: false
+                        inPre: false,
+                        startsAtLineStart: true
                     )
                     continue
                 }
             }
-            inlineContent += convertNode(child, listDepth: listDepth, orderedIndex: &orderedNestedIndex, inPre: false)
+
+            inlineContent += convertNode(
+                child,
+                listDepth: listDepth,
+                inPre: false,
+                startsAtLineStart: isAtLineStart(in: inlineContent, initial: false)
+            )
         }
 
-        let content = inlineContent
-            .trimmingCharacters(in: .whitespaces)
-            .trimmingCharacters(in: .newlines)
+        let content = inlineContent.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if hasCheckedUnicode || checkedInput {
-            let cleaned = content
-                .replacingOccurrences(of: "☑", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            return "\(indent)- [x] \(cleaned)\n\(nestedContent)"
-        } else if hasUncheckedUnicode || hasUncheckedInput {
-            let cleaned = content
-                .replacingOccurrences(of: "☐", with: "")
-                .trimmingCharacters(in: .whitespaces)
-            return "\(indent)- [ ] \(cleaned)\n\(nestedContent)"
-        } else if ordered, let idx = orderedIndex {
-            orderedIndex = idx + 1
-            return "\(indent)\(idx). \(content)\n\(nestedContent)"
-        } else {
-            return "\(indent)- \(content)\n\(nestedContent)"
+            return "\(indent)- [x] \(removingLeadingCheckbox(from: content))\n\(nestedContent)"
         }
+        if hasUncheckedUnicode || hasUncheckedInput {
+            return "\(indent)- [ ] \(removingLeadingCheckbox(from: content))\n\(nestedContent)"
+        }
+        if ordered, let index = orderedIndex {
+            orderedIndex = index + 1
+            return "\(indent)\(index). \(content)\n\(nestedContent)"
+        }
+        return "\(indent)- \(content)\n\(nestedContent)"
+    }
+
+    private static func removingLeadingCheckbox(from content: String) -> String {
+        var result = content.trimmingCharacters(in: .whitespaces)
+        if result.hasPrefix("☑") || result.hasPrefix("☐") {
+            result.removeFirst()
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    // MARK: - Tables
+
+    private static func convertTable(_ table: Element) -> String {
+        var headerRows: [[String]] = []
+        var bodyRows: [[String]] = []
+
+        for child in table.children() {
+            switch child.tagName().lowercased() {
+            case "thead":
+                headerRows.append(contentsOf: tableRows(in: child))
+            case "tbody", "tfoot":
+                bodyRows.append(contentsOf: tableRows(in: child))
+            case "tr":
+                if let row = tableRow(child) {
+                    bodyRows.append(row)
+                }
+            default:
+                continue
+            }
+        }
+
+        let rows = headerRows + bodyRows
+        guard !rows.isEmpty else { return "" }
+
+        let columnCount = rows.map(\.count).max() ?? 0
+        guard columnCount > 0 else { return "" }
+
+        let normalizedRows = rows.map { row -> [String] in
+            row + [String](repeating: "", count: columnCount - row.count)
+        }
+
+        func formattedRow(_ cells: [String]) -> String {
+            "| " + cells.joined(separator: " | ") + " |"
+        }
+
+        var lines = [formattedRow(normalizedRows[0])]
+        lines.append("| " + [String](repeating: "---", count: columnCount).joined(separator: " | ") + " |")
+        lines.append(contentsOf: normalizedRows.dropFirst().map(formattedRow))
+        return lines.joined(separator: "\n") + "\n\n"
+    }
+
+    private static func tableRows(in section: Element) -> [[String]] {
+        section.children().compactMap { child in
+            child.tagName().lowercased() == "tr" ? tableRow(child) : nil
+        }
+    }
+
+    private static func tableRow(_ row: Element) -> [String]? {
+        let cells = row.children().filter {
+            let tag = $0.tagName().lowercased()
+            return tag == "th" || tag == "td"
+        }
+        guard !cells.isEmpty else { return nil }
+        return cells.map(tableCell)
+    }
+
+    private static func tableCell(_ cell: Element) -> String {
+        let markdown = convertChildren(
+            cell,
+            listDepth: 0,
+            inPre: false,
+            startsAtLineStart: false
+        )
+        return markdown
+            .replacingOccurrences(
+                of: #"[ \t]*(?:\r\n|\r|\n)+[ \t]*"#,
+                with: "<br>",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "|", with: #"\|"#)
+    }
+
+    // MARK: - Text and code
+
+    private static func convertChildren(
+        _ element: Element,
+        listDepth: Int,
+        inPre: Bool,
+        startsAtLineStart: Bool
+    ) -> String {
+        var result = ""
+        for child in element.getChildNodes() {
+            result += convertNode(
+                child,
+                listDepth: listDepth,
+                inPre: inPre,
+                startsAtLineStart: isAtLineStart(in: result, initial: startsAtLineStart)
+            )
+        }
+        return result
+    }
+
+    private static func isAtLineStart(in output: String, initial: Bool) -> Bool {
+        guard !output.isEmpty else { return initial }
+        let suffix: Substring
+        if let newline = output.lastIndex(of: "\n") {
+            suffix = output[output.index(after: newline)...]
+        } else {
+            guard initial else { return false }
+            suffix = output[...]
+        }
+        return suffix.allSatisfy { $0 == " " || $0 == "\t" }
+    }
+
+    private static func escapeMarkdownText(_ text: String, startsAtLineStart: Bool) -> String {
+        let lines = text.components(separatedBy: "\n")
+        return lines.enumerated().map { offset, line in
+            let marker = blockMarkerIndex(
+                in: line,
+                enabled: startsAtLineStart || offset > 0
+            )
+            var result = ""
+            for index in line.indices {
+                let character = line[index]
+                if index == marker || markdownInlineMetacharacters.contains(character) {
+                    result.append("\\")
+                }
+                result.append(character)
+            }
+            return result
+        }.joined(separator: "\n")
+    }
+
+    private static let markdownInlineMetacharacters: Set<Character> = [
+        "\\", "*", "_", "[", "]", "(", ")", "`", "~", "<", "&",
+    ]
+
+    private static func blockMarkerIndex(in line: String, enabled: Bool) -> String.Index? {
+        guard enabled else { return nil }
+        let patterns = [
+            #"^\s{0,3}(#{1,6})(?:[ \t]+|$)"#,
+            #"^\s{0,3}(>)(?:[ \t]+|$)"#,
+            #"^\s{0,3}([-+])(?:[ \t]+|$)"#,
+            #"^\s{0,3}\d{1,9}([.)])(?:[ \t]+|$)"#,
+            #"^\s{0,3}([-=_])(?:[ \t]*\1){2,}[ \t]*$"#,
+        ]
+
+        for pattern in patterns {
+            guard let expression = try? NSRegularExpression(pattern: pattern),
+                  let match = expression.firstMatch(
+                      in: line,
+                      range: NSRange(line.startIndex..., in: line)
+                  ),
+                  let range = Range(match.range(at: 1), in: line) else {
+                continue
+            }
+            return range.lowerBound
+        }
+        return nil
     }
 
     private static func preservingWhitespaceText(_ element: Element) -> String {
@@ -240,84 +453,167 @@ struct HTMLToMarkdownConverter {
                 return textNode.getWholeText()
             }
             if let childElement = child as? Element {
+                if childElement.tagName().lowercased() == "br" {
+                    return "\n"
+                }
                 return preservingWhitespaceText(childElement)
             }
             return ""
         }.joined()
     }
 
+    private static func inlineCode(_ text: String) -> String {
+        let delimiter = String(
+            repeating: "`",
+            count: max(1, longestRun(of: "`", in: text) + 1)
+        )
+        let needsPadding = text.hasPrefix("`")
+            || text.hasSuffix("`")
+            || text.hasPrefix(" ")
+            || text.hasSuffix(" ")
+        let padding = needsPadding ? " " : ""
+        return "\(delimiter)\(padding)\(text)\(padding)\(delimiter)"
+    }
+
+    private static func longestRun(of character: Character, in text: String) -> Int {
+        var longest = 0
+        var current = 0
+        for value in text {
+            if value == character {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 0
+            }
+        }
+        return longest
+    }
+
+    private static func codeLanguage(from element: Element) -> String? {
+        guard let classNames = try? element.classNames() else { return nil }
+        for className in classNames where className.hasPrefix("language-") {
+            let language = String(className.dropFirst("language-".count))
+            if isSafeLanguage(language) {
+                return language
+            }
+        }
+        return nil
+    }
+
+    private static func isSafeLanguage(_ language: String) -> Bool {
+        !language.isEmpty
+            && language.range(
+                of: #"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"#,
+                options: .regularExpression
+            ) != nil
+    }
+
+    // MARK: - Links and styles
+
+    private static func markdownDestination(_ value: String, forImage: Bool) -> String? {
+        guard let safeValue = safeURL(value, forImage: forImage) else { return nil }
+        return safeValue
+            .replacingOccurrences(of: "\\", with: "%5C")
+            .replacingOccurrences(of: "(", with: "%28")
+            .replacingOccurrences(of: ")", with: "%29")
+            .replacingOccurrences(of: "<", with: "%3C")
+            .replacingOccurrences(of: ">", with: "%3E")
+    }
+
+    private static func safeURL(_ value: String, forImage: Bool) -> String? {
+        guard !value.isEmpty,
+              value.unicodeScalars.allSatisfy({
+                  !CharacterSet.controlCharacters.contains($0)
+                      && !CharacterSet.whitespacesAndNewlines.contains($0)
+              }),
+              let components = URLComponents(string: value) else {
+            return nil
+        }
+
+        guard let scheme = components.scheme?.lowercased() else {
+            return forImage || value.hasPrefix("//") ? nil : value
+        }
+        if forImage {
+            return ["http", "https"].contains(scheme) && components.host != nil ? value : nil
+        }
+        return ["http", "https", "mailto", "tel"].contains(scheme) ? value : nil
+    }
+
     private static func applyInlineStyle(to content: String, style: String) -> String {
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return content
+        }
         let normalizedStyle = style.lowercased()
         var result = content
-        if normalizedStyle.range(of: #"font-weight\s*:\s*(bold|[6-9]00)"#, options: .regularExpression) != nil {
+        if normalizedStyle.range(
+            of: #"font-weight\s*:\s*(bold|[6-9]00)"#,
+            options: .regularExpression
+        ) != nil {
             result = "**\(result)**"
         }
-        if normalizedStyle.range(of: #"font-style\s*:\s*italic"#, options: .regularExpression) != nil {
+        if normalizedStyle.range(
+            of: #"font-style\s*:\s*italic"#,
+            options: .regularExpression
+        ) != nil {
             result = "*\(result)*"
         }
-        if normalizedStyle.range(of: #"text-decoration[^;]*line-through"#, options: .regularExpression) != nil {
+        if normalizedStyle.range(
+            of: #"text-decoration[^;]*line-through"#,
+            options: .regularExpression
+        ) != nil {
             result = "~~\(result)~~"
         }
         return result
     }
 
-    private static func convertTable(_ table: Element) -> String {
-        var rows: [[String]] = []
+    // MARK: - Output normalization
 
-        // Collect header rows
-        if let thead = try? table.select("thead").first() {
-            for tr in (try? thead.select("tr")) ?? Elements() {
-                let cells = (try? tr.select("th, td")) ?? Elements()
-                let row = cells.map { (try? $0.text()) ?? "" }
-                rows.append(row)
+    private static func normalizeMarkdown(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        var output: [String] = []
+        var activeFence: String?
+        var previousWasBlank = false
+
+        for line in trimmed.components(separatedBy: "\n") {
+            let whitespaceTrimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if let fence = activeFence {
+                output.append(line)
+                if whitespaceTrimmed == fence {
+                    activeFence = nil
+                }
+                continue
+            }
+
+            if let fence = openingFence(in: whitespaceTrimmed) {
+                output.append(line)
+                activeFence = fence
+                previousWasBlank = false
+                continue
+            }
+
+            if whitespaceTrimmed.isEmpty {
+                if !previousWasBlank {
+                    output.append("")
+                    previousWasBlank = true
+                }
+            } else {
+                output.append(line)
+                previousWasBlank = false
             }
         }
 
-        // Collect body rows
-        let bodyRows: Elements
-        if let tbody = try? table.select("tbody").first() {
-            bodyRows = (try? tbody.select("tr")) ?? Elements()
-        } else {
-            bodyRows = (try? table.select("tr")) ?? Elements()
-        }
-        for tr in bodyRows {
-            let cells = (try? tr.select("th, td")) ?? Elements()
-            let row = cells.map { (try? $0.text()) ?? "" }
-            if !row.isEmpty {
-                rows.append(row)
-            }
-        }
+        return output.joined(separator: "\n")
+    }
 
-        guard !rows.isEmpty else { return "" }
-
-        // Determine column widths
-        let colCount = rows.map(\.count).max() ?? 0
-        var colWidths = [Int](repeating: 3, count: colCount)
-        for row in rows {
-            for (i, cell) in row.enumerated() where i < colCount {
-                colWidths[i] = max(colWidths[i], cell.count)
-            }
-        }
-
-        func formatRow(_ cells: [String]) -> String {
-            var padded: [String] = []
-            for i in 0..<colCount {
-                let cell = i < cells.count ? cells[i] : ""
-                padded.append(cell.padding(toLength: colWidths[i], withPad: " ", startingAt: 0))
-            }
-            return "| " + padded.joined(separator: " | ") + " |"
-        }
-
-        var result = ""
-        // Header
-        result += formatRow(rows[0]) + "\n"
-        // Separator
-        let sep = colWidths.map { String(repeating: "-", count: $0) }
-        result += "| " + sep.joined(separator: " | ") + " |\n"
-        // Body rows
-        for row in rows.dropFirst() {
-            result += formatRow(row) + "\n"
-        }
-        return result
+    private static func openingFence(in line: String) -> String? {
+        guard line.first == "`" else { return nil }
+        let count = line.prefix(while: { $0 == "`" }).count
+        guard count >= 3 else { return nil }
+        let fence = String(repeating: "`", count: count)
+        let metadata = line.dropFirst(count)
+        return metadata.contains("`") ? nil : fence
     }
 }
