@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import AppKit
 
 struct ContentView: View {
     @State private var clipboardText: String? = nil
@@ -9,18 +8,33 @@ struct ContentView: View {
     @State private var clipboardLength: Int = 0
     @State private var feedbackMessage: String? = nil
     @State private var feedbackIsSuccess: Bool = true
-    @State private var lastChangeCount: Int = 0
+    @State private var lastChangeCount: Int? = nil
+    @State private var isConverting = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let clipboard: any ClipboardAccessing
+
+    init(clipboard: any ClipboardAccessing = SystemClipboard()) {
+        self.clipboard = clipboard
+    }
 
     private var clipboardMode: ClipboardMode {
         ClipboardContentDetector.mode(text: clipboardText, html: clipboardHTML, rtfData: clipboardRTF)
     }
 
+    private var canConvertToLoop: Bool {
+        !(clipboardText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    private var canConvertToMarkdown: Bool {
+        ClipboardContentDetector.containsHTML(clipboardHTML)
+            || ClipboardContentDetector.containsRTF(clipboardRTF)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             clipboardStatusView
-            convertButton
+            conversionButtons
             feedbackView
         }
         .padding(20)
@@ -53,15 +67,15 @@ struct ContentView: View {
                 case .markdown:
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                    Text("Markdown")
+                    Text("Detected Markdown")
                 case .richText:
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.blue)
-                    Text("Rich Text")
+                    Text("Detected Rich Text")
                 case .unknown:
                     Image(systemName: "questionmark.circle")
                         .foregroundStyle(.secondary)
-                    Text("Unrecognized format")
+                    Text("Detection uncertain")
                 }
             }
             .font(.subheadline)
@@ -70,29 +84,58 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private var convertButton: some View {
-        Button {
-            convert()
+    private var conversionButtons: some View {
+        VStack(spacing: 8) {
+            conversionButton(
+                title: "Convert to Loop",
+                systemImage: "arrow.right",
+                action: .toLoop,
+                isEnabled: canConvertToLoop,
+                isRecommended: clipboardMode == .markdown
+            )
+            conversionButton(
+                title: "Convert to Markdown",
+                systemImage: "arrow.left",
+                action: .toMarkdown,
+                isEnabled: canConvertToMarkdown,
+                isRecommended: clipboardMode == .richText
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func conversionButton(
+        title: String,
+        systemImage: String,
+        action: ClipboardConversionAction,
+        isEnabled: Bool,
+        isRecommended: Bool
+    ) -> some View {
+        let button = Button {
+            convert(using: action)
         } label: {
             HStack {
-                switch clipboardMode {
-                case .markdown:
-                    Label("Convert to Loop", systemImage: "arrow.right")
-                case .richText:
-                    Label("Convert to Markdown", systemImage: "arrow.left")
-                case .unknown:
-                    Label("Convert", systemImage: "arrow.left.arrow.right")
-                }
+                Label(title, systemImage: systemImage)
                 Spacer()
-                Text("⌘⏎")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
+                if isRecommended {
+                    Text("⌘⏎")
+                        .font(.subheadline)
+                        .opacity(0.7)
+                }
             }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
         .controlSize(.large)
-        .keyboardShortcut(.return, modifiers: .command)
-        .disabled(clipboardMode == .unknown)
+        .accessibilityLabel(title)
+        .disabled(!isEnabled || isConverting)
+
+        if isRecommended {
+            button
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
+        } else {
+            button.buttonStyle(.bordered)
+        }
     }
 
     @ViewBuilder
@@ -111,37 +154,40 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func pollClipboard() {
-        let changeCount = NSPasteboard.general.changeCount
-        guard changeCount != lastChangeCount else { return }
-        lastChangeCount = changeCount
-        clipboardText = ClipboardManager.readText()
-        clipboardHTML = ClipboardManager.readHTML()
-        clipboardRTF = ClipboardManager.readRTF()
-        clipboardLength = clipboardText?.count ?? clipboardHTML?.count ?? clipboardRTF?.count ?? 0
-    }
+        guard !isConverting else { return }
 
-    private func convert() {
-        if clipboardMode == .richText {
-            convertToMarkdown()
-        } else if clipboardMode == .markdown {
-            convertToLoop()
+        do {
+            let snapshot = try clipboard.readSnapshot()
+            guard snapshot.changeCount != lastChangeCount else { return }
+            lastChangeCount = snapshot.changeCount
+            clipboardText = snapshot.text
+            clipboardHTML = snapshot.html
+            clipboardRTF = snapshot.rtfData
+            clipboardLength = snapshot.contentLength
+        } catch {
+            showFeedback(error.localizedDescription, isSuccess: false)
         }
     }
 
-    private func convertToLoop() {
-        guard let markdown = clipboardText, !markdown.isEmpty else { return }
-        let html = LoopHTMLConverter.convert(markdown)
-        ClipboardManager.writeForLoop(html: html, markdown: markdown)
-        showFeedback("Ready to paste into Loop", isSuccess: true)
-    }
+    private func convert(using action: ClipboardConversionAction) {
+        guard !isConverting else { return }
+        isConverting = true
 
-    private func convertToMarkdown() {
-        guard let markdown = ClipboardManager.readRichTextMarkdown() else {
-            showFeedback("Could not read rich text", isSuccess: false)
-            return
+        do {
+            let result = try ClipboardConversionService(clipboard: clipboard)
+                .convertCurrentSnapshot(using: action)
+            switch result.action {
+            case .toLoop:
+                showFeedback("Ready to paste into Loop", isSuccess: true)
+            case .toMarkdown:
+                showFeedback("Markdown copied", isSuccess: true)
+            }
+        } catch {
+            showFeedback(error.localizedDescription, isSuccess: false)
         }
-        ClipboardManager.writeMarkdown(markdown)
-        showFeedback("Markdown copied", isSuccess: true)
+
+        isConverting = false
+        pollClipboard()
     }
 
     private func showFeedback(_ message: String, isSuccess: Bool) {
