@@ -62,7 +62,7 @@ jobs:
             exit 1
           fi
 
-          cert_file="$(mktemp /tmp/md2loop-cert.XXXXXX.p12)"
+          cert_file="$(mktemp /tmp/md2loop-cert.XXXXXX)"
           keychain_file="/tmp/md2loop-build-${{ github.run_id }}.keychain-db"
           keychain_password="$(openssl rand -base64 32)"
 
@@ -76,7 +76,16 @@ jobs:
           security import /tmp/DeveloperIDG2CA.cer -k "$keychain_file" -T /usr/bin/codesign
           security import "$cert_file" -P "$MACOS_CERTIFICATE_PWD" -A -t cert -f pkcs12 -k "$keychain_file"
           security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain_file"
-          security list-keychains -d user -s "$keychain_file" $(security list-keychains -d user | tr -d '"')
+
+          user_keychains=()
+          while IFS= read -r existing_keychain; do
+            existing_keychain="${existing_keychain#*\"}"
+            existing_keychain="${existing_keychain%\"*}"
+            if [[ -n "$existing_keychain" ]]; then
+              user_keychains+=("$existing_keychain")
+            fi
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain_file" "${user_keychains[@]}"
 
           identity="$(security find-identity -v -p codesigning "$keychain_file" | grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)"/\1/')"
           if [[ -z "$identity" ]]; then
@@ -89,17 +98,41 @@ jobs:
 
           rm -f "$cert_file" /tmp/DeveloperIDG2CA.cer
 
-      - name: Build signed app and DMG
+      - name: Build signed app
         shell: bash
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
           CODESIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
-          DMG_PATH: dist/md2loop-${{ steps.release.outputs.version }}-macos.dmg
         run: |
           set -euo pipefail
           chmod +x scripts/*.sh
           ./scripts/build_release.sh
+
+      - name: Notarize and validate app
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APP_PATH: dist/md2loop.app
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$APPLE_ID" || -z "$APPLE_TEAM_ID" || -z "$APPLE_APP_PASSWORD" ]]; then
+            echo "APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_PASSWORD secrets are required for notarization."
+            exit 1
+          fi
+
+          ./scripts/notarize_app.sh
+
+      - name: Build signed DMG
+        shell: bash
+        env:
+          CODESIGN_IDENTITY: ${{ env.CODESIGN_IDENTITY }}
+          DMG_PATH: dist/md2loop-${{ steps.release.outputs.version }}-macos.dmg
+        run: |
+          set -euo pipefail
           ./scripts/make_dmg.sh
 
       - name: Notarize DMG
@@ -119,6 +152,14 @@ jobs:
 
           ./scripts/notarize_dmg.sh
 
+      - name: Validate notarized release artifact
+        shell: bash
+        env:
+          DMG_PATH: dist/md2loop-${{ steps.release.outputs.version }}-macos.dmg
+        run: |
+          set -euo pipefail
+          ./scripts/verify_release_dmg.sh
+
       - name: Cleanup keychain
         if: always()
         shell: bash
@@ -132,6 +173,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: md2loop-macos-dmg
+          if-no-files-found: error
           path: |
             dist/md2loop-${{ steps.release.outputs.version }}-macos.dmg
             dist/md2loop-${{ steps.release.outputs.version }}-macos.dmg.sha256

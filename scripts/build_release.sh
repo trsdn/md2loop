@@ -74,6 +74,7 @@ build_settings=(
   MARKETING_VERSION="$RELEASE_VERSION"
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
   ENABLE_HARDENED_RUNTIME=YES
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 )
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
@@ -107,6 +108,12 @@ ditto "$BUILT_APP" "$DIST_APP"
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
   codesign --verify --strict --deep --verbose=2 "$DIST_APP"
+  if codesign -d --entitlements :- "$DIST_APP" 2>/dev/null \
+    | grep -A1 '<key>com.apple.security.get-task-allow</key>' \
+    | grep -q '<true/>'; then
+    echo "Release app must not contain the com.apple.security.get-task-allow entitlement."
+    exit 1
+  fi
   codesign -dv --verbose=4 "$DIST_APP" 2>&1 | grep -E 'Authority=|TeamIdentifier=|Runtime|Timestamp' || true
 fi
 

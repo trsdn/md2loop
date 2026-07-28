@@ -48,7 +48,6 @@ if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
 fi
 
 hdiutil verify "$DMG_PATH"
-shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
 
 echo "DMG created: $DMG_PATH"
-echo "Checksum created: $DMG_PATH.sha256"
+echo "Checksum will be generated after notarization."

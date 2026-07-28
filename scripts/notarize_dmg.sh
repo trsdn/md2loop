@@ -17,12 +17,12 @@ if [[ ! -f "$DMG_PATH" ]]; then
   exit 1
 fi
 
-if ! xcrun notarytool --help >/dev/null 2>&1; then
+if ! xcrun --find notarytool >/dev/null 2>&1; then
   echo "xcrun notarytool is required for notarization."
   exit 1
 fi
 
-if ! xcrun stapler help >/dev/null 2>&1; then
+if ! xcrun --find stapler >/dev/null 2>&1; then
   echo "xcrun stapler is required to staple the notarization ticket."
   exit 1
 fi
@@ -32,14 +32,7 @@ if [[ -n "${NOTARY_PROFILE:-}" ]]; then
     --keychain-profile "$NOTARY_PROFILE" \
     --wait
 else
-  missing=()
-  for variable in APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
-    if [[ -z "${!variable:-}" ]]; then
-      missing+=("$variable")
-    fi
-  done
-
-  if [[ "${#missing[@]}" -gt 0 ]]; then
+  if [[ -z "${APPLE_ID:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_APP_PASSWORD:-}" ]]; then
     echo "Set NOTARY_PROFILE or provide notarization environment variables: APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD"
     exit 1
   fi
@@ -52,9 +45,15 @@ else
 fi
 
 xcrun stapler staple "$DMG_PATH"
-xcrun stapler validate "$DMG_PATH"
-spctl --assess --type open --context context:primary-signature --verbose "$DMG_PATH"
 
-shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
+dmg_directory="$(dirname "$DMG_PATH")"
+dmg_name="$(basename "$DMG_PATH")"
+(
+  cd "$dmg_directory"
+  shasum -a 256 "$dmg_name"
+) > "$DMG_PATH.sha256"
+
+checksum_path="$DMG_PATH.sha256"
+DMG_PATH="$DMG_PATH" CHECKSUM_PATH="$checksum_path" ./scripts/verify_release_dmg.sh
 
 echo "DMG notarization complete: $DMG_PATH"
