@@ -24,7 +24,7 @@
 - **Loop → Markdown** — Converts Loop's rich text back to clean Markdown
 - **Auto-detection** — Automatically detects content type (Markdown vs HTML)
 - **One shortcut** — ⌘⏎ does the right thing based on content
-- **Full Markdown support** — Headings, bold/italic, lists, tables, code blocks, task lists, links, blockquotes
+- **Full Markdown support** — Headings, bold/italic, lists, tables, code blocks, task lists, links, images, blockquotes
 - **Native macOS app** — SwiftUI, lightweight, no Electron
 
 ## Screenshots
@@ -52,8 +52,10 @@ xcodebuild -project md2loop.xcodeproj -scheme md2loop -configuration Release bui
 
 ### Release build
 
-The macOS release flow builds a Developer ID signed app, packages it as a signed DMG, notarizes it,
-and uploads both the DMG and a SHA-256 checksum to the GitHub Release for a `v*` tag.
+The macOS release flow builds and notarizes a Developer ID signed app, staples it before packaging,
+then signs, notarizes, and staples the DMG. After those mutation steps it generates a basename-only
+SHA-256 checksum, Gatekeeper-validates the DMG and its mounted app, and only then uploads assets for a
+`v*` tag.
 
 Required GitHub Actions secrets:
 
@@ -91,18 +93,23 @@ REQUIRE_SIGNING=0 ./scripts/build_release.sh
 
 1. Copy Markdown text to your clipboard
 2. Open md2loop (or use ⌘⏎)
-3. The app detects the content and shows the appropriate conversion
-4. Click **Convert** (or press ⌘⏎)
+3. The app detects the content and highlights the recommended conversion
+4. Choose **Convert to Loop** or **Convert to Markdown**; both buttons remain available when both
+   clipboard representations exist
 5. Paste into Microsoft Loop (⌘V)
 
-Works the other way too — copy from Loop, convert to Markdown.
+`⌘⏎` runs the detected recommendation. Use either visible button to override detection.
 
 ## How it works
 
 - Uses [apple/swift-markdown](https://github.com/apple/swift-markdown) for Markdown → HTML via a custom `MarkupVisitor` optimized for Loop
 - Uses [SwiftSoup](https://github.com/scinfu/SwiftSoup) for HTML → Markdown
 - Sets the clipboard with HTML + RTF + plain text for maximum compatibility
-- Loop-specific optimizations: no CSS classes, Unicode checkboxes for task lists (☑/☐), minimal table HTML
+- Loop-specific optimizations: minimal HTML, Unicode checkboxes for task lists (☑/☐), and safe code-language metadata
+
+Remote Markdown images using `http` or `https` are emitted as escaped `<img>` elements. For an empty,
+unsafe, relative, or unsupported image URL, md2loop emits an image element with escaped alt text but no
+`src`; this deterministic fallback keeps image semantics without passing an unsafe URL to Loop.
 
 ## Requirements
 
